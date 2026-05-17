@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  BRANCH_ADMIN
+  CUSTOMER
+}
+
+enum SpaceType {
+  VIRTUAL_OFFICE
+  COWORKING_HOT_DESK
+  DEDICATED_DESK
+  PRIVATE_CABIN
+  MEETING_ROOM
+}
+
+enum BookingType {
+  VIRTUAL_OFFICE
+  COWORKING
+  MEETING_ROOM
+}
+
+enum PlanType {
+  HOURLY
+  DAILY
+  MONTHLY
+  ANNUAL
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentMode {
+  CASH
+  NEFT
+  UPI
+  CHEQUE
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum DocumentType {
+  AADHAR
+  PAN
+  GST_CERTIFICATE
+  COMPANY_PAN
+  MOA
+  AOA
+  BOARD_RESOLUTION
+  NOC_ISSUED
+  RENT_AGREEMENT
+  OTHER
+}
+
+enum NocStatus {
+  REQUESTED
+  GENERATED
+  ISSUED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  password     String
+  name         String?
+  phone        String?
+  company_name String?
+  gst_number   String?
+  role         Role      @default(CUSTOMER)
+  is_verified  Boolean   @default(false)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  bookings     Booking[] @relation("UserBookings")
+  documents    Document[]
+  payments     Payment[]
+  invoices     Invoice[]
+  branchAdmins BranchAdmin[]
+  verified_documents Document[] @relation("VerifiedDocs")
+}
+
+model Branch {
+  id            String    @id @default(cuid())
+  name          String
+  address       String
+  city          String
+  state         String
+  pincode       String
+  phone         String?
+  email         String?
+  is_active     Boolean   @default(true)
+  google_maps_url String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  spaces        Space[]
+  branchAdmins  BranchAdmin[]
+  announcements Announcement[]
+  bookings      Booking[]
+}
+
+model BranchAdmin {
+  id       String  @id @default(cuid())
+  branch   Branch  @relation(fields: [branchId], references: [id])
+  branchId String
+  user     User    @relation(fields: [userId], references: [id])
+  userId   String
+}
+
+model Space {
+  id               String      @id @default(cuid())
+  branch           Branch      @relation(fields: [branchId], references: [id])
+  branchId         String
+  name             String
+  type             SpaceType
+  description      String?
+  capacity         Int?
+  area_sqft        Float?
+  price_per_month  Float?
+  price_per_day    Float?
+  price_per_hour   Float?
+  amenities        Json?
+  images           Json?
+  is_active        Boolean     @default(true)
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  bookings         Booking[]
+}
+
+model Booking {
+  id                 String       @id @default(cuid())
+  booking_number     String       @unique
+  user               User         @relation("UserBookings", fields: [userId], references: [id])
+  userId             String
+  space              Space        @relation(fields: [spaceId], references: [id])
+  spaceId            String
+  branch             Branch       @relation(fields: [branchId], references: [id])
+  branchId           String
+  booking_type       BookingType
+  plan_type          PlanType
+  start_date         DateTime?
+  end_date           DateTime?
+  status             BookingStatus @default(PENDING)
+  total_amount       Float?
+  paid_amount        Float?
+  balance_amount     Float?
+  purpose_of_use     String?
+  company_name_for_noc String?
+  director_name      String?
+  director_din       String?
+  notes              String?
+  created_at         DateTime     @default(now())
+  updated_at         DateTime     @updatedAt
+
+  payments           Payment[]
+  documents          Document[]
+  noc_requests       NOCRequest[]
+  invoice            Invoice?
+}
+
+model Payment {
+  id                   String        @id @default(cuid())
+  booking              Booking       @relation(fields: [bookingId], references: [id])
+  bookingId            String
+  user                 User          @relation(fields: [userId], references: [id])
+  userId               String
+  amount               Float
+  payment_mode         PaymentMode
+  transaction_reference String?
+  payment_date         DateTime      @default(now())
+  status               PaymentStatus @default(PENDING)
+  receipt_number       String?
+  notes                String?
+}
+
+model Document {
+  id           String       @id @default(cuid())
+  booking      Booking?     @relation(fields: [bookingId], references: [id])
+  bookingId    String?
+  user         User         @relation(fields: [userId], references: [id])
+  userId       String
+  doc_type     DocumentType
+  file_url     String
+  file_name    String
+  uploaded_at  DateTime     @default(now())
+  verified     Boolean      @default(false)
+  verified_by  User?        @relation("VerifiedDocs", fields: [verifiedById], references: [id])
+  verifiedById String?
+  verified_at  DateTime?
+}
+
+model NOCRequest {
+  id             String    @id @default(cuid())
+  booking        Booking   @relation(fields: [bookingId], references: [id])
+  bookingId      String
+  company_name   String?
+  director_name  String?
+  director_din   String?
+  purpose        String?
+  status         NocStatus @default(REQUESTED)
+  generated_pdf_url String?
+  issued_at      DateTime?
+  valid_until    DateTime?
+}
+
+model Announcement {
+  id         String   @id @default(cuid())
+  branch     Branch?  @relation(fields: [branchId], references: [id])
+  branchId   String?
+  title      String
+  body       String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  booking       Booking? @relation(fields: [bookingId], references: [id])
+  bookingId     String?  @unique
+  user          User?    @relation(fields: [userId], references: [id])
+  userId        String?
+  amount        Float
+  invoice_number String?  @unique
+  pdf_url       String?
+  issued_at     DateTime?
+}
+
